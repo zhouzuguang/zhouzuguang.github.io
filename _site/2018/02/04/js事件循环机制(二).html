@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>js事件循环机制(二) - 周祖光的独立博客</title>
+    <meta name="author"  content="周祖光">
+    <meta name="description" content="js事件循环机制(二)">
+    <meta name="keywords"  content="js基础">
+    <!-- Open Graph -->
+    <meta property="og:title" content="js事件循环机制(二) - 周祖光的独立博客">
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="http://localhost:4000/2018/02/04/js%E4%BA%8B%E4%BB%B6%E5%BE%AA%E7%8E%AF%E6%9C%BA%E5%88%B6(%E4%BA%8C).html">
+    <meta property="og:description" content="学生/前端开发者/，热爱打羽毛球&听音乐。很高兴能在这里与你分享我对技术和生活的思考。">
+    <meta property="og:site_name" content="周祖光的独立博客">
+    <link rel="icon" type="image/x-icon" href="/assets/icons/favicon.ico">
+    <link rel="stylesheet" href="//cdn.staticfile.org/normalize/6.0.0/normalize.min.css">
+    <link rel="stylesheet" href="//at.alicdn.com/t/font_roc50gemkxpw4s4i.css">
+    <link rel="stylesheet" href="/assets/css/github-markdown.css">
+    <link rel="stylesheet" href="/assets/css/prism.css">
+    <link rel="stylesheet" href="/assets/css/share.min.css">
+    <link rel="stylesheet" href="/assets/css/app.min.css">
+</head>
+<body>
+    <!--[if lt IE 10]>
+<div class="alert-danger" role="alert">你的浏览器实在太太太旧了，放学别走，升级完浏览器再说！<a target="_blank" class="alert-link" href="http://browsehappy.com">立即升级</a></div>
+<![endif]-->
+<input id="nm-switch" type="hidden" value="true">
+
+<header class="g-header">
+    <div class="g-logo">
+      <a href="/"></a>
+    </div>
+    <i id="menu-toggle" class="iconfont icon-menu"></i>
+    <nav class="g-nav">
+        <ul>
+            
+            <li><a href="/">home</a></li>
+            
+            <li><a href="/tags.html">tags</a></li>
+            
+        </ul>
+    </nav>
+</header>
+
+
+<header class="g-banner post-header post-pattern-food bgcolor-default " data-theme="default">
+    <div class="post-wrapper">
+        <div class="post-tags">
+            
+            
+            <a href="http://localhost:4000/tags#js%E5%9F%BA%E7%A1%80" class="post-tag">js基础</a>
+            
+            
+        </div>
+        <h1>js事件循环机制(二)</h1>
+        <div class="post-meta">
+            <span class="post-meta-item"><i class="iconfont icon-author"></i><a href="http://localhost:4000" target="_blank" rel="author">Joe</a></></span>
+            <time class="post-meta-item" datetime="18-02-04"><i class="iconfont icon-date"></i>04 Feb 2018</time>
+        </div>
+    </div>
+    
+    <div class="filter"></div>
+    <div class="post-cover" style="background: url('') center no-repeat; background-size: cover;">
+    
+</header>
+
+<div class="post-content">
+    
+    <article class="markdown-body">
+        <h3 id="前言">前言</h3>
+
+<p><a href="./js%E4%BA%8B%E4%BB%B6%E5%BE%AA%E7%8E%AF%E6%9C%BA%E5%88%B6(%E4%B8%80).html">上一篇</a>介绍了 <strong>事件循环</strong> 的基础， 这一篇主要介绍 <code class="highlighter-rouge">macrotask</code>  和  <code class="highlighter-rouge">microtask</code>。</p>
+
+<h3 id="一引入">一、引入</h3>
+<div class="language-javascript highlighter-rouge"><div class="highlight"><pre class="highlight"><code>    <span class="p">(</span><span class="kd">function</span> <span class="nx">test</span><span class="p">()</span> <span class="p">{</span>
+        <span class="nx">setTimeout</span><span class="p">(</span><span class="kd">function</span><span class="p">()</span> <span class="p">{</span><span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="mi">4</span><span class="p">)}</span><span class="err">，</span> <span class="mi">0</span><span class="p">);</span>
+        <span class="k">new</span> <span class="nb">Promise</span><span class="p">(</span><span class="kd">function</span> <span class="nx">executor</span><span class="p">(</span><span class="nx">resolve</span><span class="p">)</span> <span class="p">{</span>
+            <span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="mi">1</span><span class="p">);</span>
+            <span class="k">for</span><span class="p">(</span> <span class="kd">var</span> <span class="nx">i</span><span class="o">=</span><span class="mi">0</span> <span class="p">;</span> <span class="nx">i</span><span class="o">&lt;</span><span class="mi">10000</span> <span class="p">;</span> <span class="nx">i</span><span class="o">++</span> <span class="p">)</span> <span class="p">{</span>
+                <span class="nx">i</span> <span class="o">==</span> <span class="mi">9999</span> <span class="o">&amp;&amp;</span> <span class="nx">resolve</span><span class="p">();</span>
+            <span class="p">}</span>
+            <span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="mi">2</span><span class="p">);</span>
+        <span class="p">}).</span><span class="nx">then</span><span class="p">(</span><span class="kd">function</span><span class="p">()</span> <span class="p">{</span>
+            <span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="mi">5</span><span class="p">);</span>
+        <span class="p">});</span>
+        <span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="mi">3</span><span class="p">);</span>
+    <span class="p">})()</span>
+
+</code></pre></div></div>
+<p>执行结果</p>
+<div class="language-javascript highlighter-rouge"><div class="highlight"><pre class="highlight"><code>    <span class="mi">1</span>
+    <span class="mi">2</span>
+    <span class="mi">3</span>
+    <span class="mi">5</span>
+    <span class="mi">4</span>
+</code></pre></div></div>
+<p>可以看看<a href="https://html.spec.whatwg.org/multipage/webappapis.html#task-queue">whatwg规范</a>，大概可以用下面的事件执行模型来理解</p>
+<h3 id="二event-loop-执行模型">二、event-loop 执行模型</h3>
+
+<ul>
+  <li>
+    <p>1.在 macrotask 队列中执行最早的那个 task ，然后移出</p>
+  </li>
+  <li>
+    <p>2.执行 microtask 队列中所有可用的任务，然后移出</p>
+  </li>
+  <li>
+    <p>3.执行下一个 macrotask 中的任务 (再跳到第2步)</p>
+  </li>
+</ul>
+
+<h3 id="三macrotask-microtask分类">三、macrotask microtask分类</h3>
+
+<p><strong>macrotask</strong>: <em>整段script代码</em>  <em>setTimeout</em>  <em>setInterval</em> <em>setImmediate</em> <em>I/O</em> <em>UI渲染</em></p>
+
+<p><strong>microtask</strong>: <em>Promise</em> <em>process.nextTick</em> <em>Object.observe</em> <em>MutationObserver</em></p>
+
+<p>按照上面的事件执行模型和事件分类，来理解一下上面的demo</p>
+<div class="language-javascript highlighter-rouge"><div class="highlight"><pre class="highlight"><code>    <span class="c1">//伪代码</span>
+    <span class="kd">var</span> <span class="nx">macrotasks</span> <span class="o">=</span> <span class="p">[</span><span class="s1">'整段script代码'</span><span class="p">]</span><span class="err">，</span>
+        <span class="nx">microtasks</span> <span class="o">=</span> <span class="p">[];</span>
+    <span class="c1">//一次事件循环</span>
+    <span class="k">while</span><span class="p">(</span> <span class="nx">macrotasks</span><span class="p">.</span><span class="nx">length</span><span class="o">&gt;</span><span class="mi">0</span><span class="p">){</span>
+        <span class="nx">macrotasks</span><span class="p">.</span><span class="nx">shift</span><span class="p">();</span>
+        <span class="c1">// 有些macrotask 可能会产生macrotask microtasks</span>
+        <span class="c1">//  即 microtasks.push()</span>
+        <span class="c1">//  如上面的 '整段代码' 产生一个macrotask -&gt; setTimeout，又产生一个microtask -&gt; Promise</span>
+        <span class="k">while</span><span class="p">(</span><span class="nx">microtasks</span><span class="p">.</span><span class="nx">length</span><span class="o">&gt;</span><span class="mi">0</span><span class="p">){</span>
+            <span class="nx">microtasks</span><span class="p">.</span><span class="nx">shift</span><span class="p">();</span>
+        <span class="p">}</span>
+    <span class="p">}</span>
+
+</code></pre></div></div>
+<p>上面的demo执行过程如下：开始时 <strong>macrotask队列</strong> 有 ‘整段的script代码’，microtask队列无任务。
+开始执行第一个 <strong>macrotask</strong>:</p>
+<ul>
+  <li>1.发现 <code class="highlighter-rouge">setTimeout</code> ，执行 <code class="highlighter-rouge">macrotasks.push("setTimeout")</code></li>
+  <li>2.发现 <code class="highlighter-rouge">Promise</code> ，<code class="highlighter-rouge">执行console.log(1)</code>，执行 <code class="highlighter-rouge">microtasks.push('Promise')</code> 
+，执行<code class="highlighter-rouge">console.log(2)</code></li>
+  <li>3.执行<code class="highlighter-rouge">console.log(3)</code>;</li>
+</ul>
+
+<p>至此 第一个 <strong>macrotask</strong> 处理完成，检查是否有 <strong>microtask</strong>，开始处理 <strong>microtask</strong>:</p>
+<ul>
+  <li>1.执行<code class="highlighter-rouge">console.log(5)</code>;</li>
+</ul>
+
+<p>至此 <strong>microtask</strong> 处理完成，检查是否还有 <strong>macrotask</strong>，开始处理第二个 <strong>macrotask</strong>:</p>
+<ul>
+  <li>1.执行 <code class="highlighter-rouge">console.log(4)</code></li>
+</ul>
+
+<h3 id="四参考文章">四、参考文章</h3>
+
+<p>1.<a href="http://www.cnblogs.com/dong-xu/p/7000139.html">深入理解 JavaScript 事件循环（二）— task and microtask</a></p>
+
+<p>2.<a href="https://zhuanlan.zhihu.com/p/26238030">深入浅出JavaScript事件循环机制(下)</a></p>
+
+<p>3.<a href="https://juejin.im/entry/58332d560ce46300610e4bad">理解 js 事件循环二 (macrotask 和 microtask)</a></p>
+
+<p>4.<a href="https://html.spec.whatwg.org/multipage/webappapis.html#task-queue">whatwg规范</a></p>
+
+    </article>
+    
+</div>
+
+<section class="author-detail">
+    <section class="post-footer-item author-card">
+        <div class="avatar">
+            <img src="http://localhost:4000/assets/img/profile.png" alt="">
+        </div>
+        <div class="author-name" rel="author">周祖光</div>
+        <div class="bio">
+            <p>程序猿|前端开发者，热爱打羽毛球&听音乐，简单乐观爱生活</p>
+        </div>
+        
+        <ul class="sns-links">
+            
+            <li>
+                <a href="//github.com/zhouzuguang" target="_blank">
+                    <i class="iconfont icon-github"></i>
+                </a>
+            </li>
+            
+        </ul>
+        
+    </section>
+    <section class="post-footer-item read-next">
+        
+        
+        <div class="read-next-item">
+            <a href="/2018/02/04/js%E4%BA%8B%E4%BB%B6%E5%BE%AA%E7%8E%AF%E6%9C%BA%E5%88%B6(%E4%B8%80).html" class="read-next-link"></a>
+            <section>
+                <span>js事件循环机制(一)</span>
+                <p>前言</p>
+            </section>
+            
+            <div class="filter"></div>
+            <img src="" alt="">
+            
+        </div>
+        
+    </section>
+    
+</section>
+
+<footer class="g-footer">
+    <section>周祖光的独立博客 © 2018</section>
+    <section>Powered by <a href="//jekyllrb.com">Jekyll</a> | <a href="https://github.com/kaeyleo/jekyll-theme-H2O">Theme H2O</a></section>
+</footer>
+
+<!-- <script src="/assets/js/social-share.min.js"></script>
+<script>
+    socialShare('.social-share', {
+        sites: ['github'],
+        wechatQrcodeTitle: "分享到微信朋友圈",
+        wechatQrcodeHelper: '<p>扫码后点击右上角</p><p>将本文分享至朋友圈</p>'
+    });
+</script> -->
+<!-- <script>
+/**
+*  RECOMMENDED CONFIGURATION VARIABLES: EDIT AND UNCOMMENT THE SECTION BELOW TO INSERT DYNAMIC VALUES FROM YOUR PLATFORM OR CMS.
+*  LEARN WHY DEFINING THESE VARIABLES IS IMPORTANT: https://disqus.com/admin/universalcode/#configuration-variables*/
+/*
+var disqus_config = function () {
+this.page.url = PAGE_URL;  // Replace PAGE_URL with your page's canonical URL variable
+this.page.identifier = PAGE_IDENTIFIER; // Replace PAGE_IDENTIFIER with your page's unique identifier variable
+};
+*/
+
+(function() { // DON'T EDIT BELOW THIS LINE
+var d = document, s = d.createElement('script');
+/*写入自己的disqus信息*/
+s.src = 'https://liaokeyu.disqus.com/embed.js';
+s.setAttribute('data-timestamp', +new Date());
+(d.head || d.body).appendChild(s);
+})();
+</script>
+<noscript>Please enable JavaScript to view the <a href="https://disqus.com/?ref_noscript">comments powered by Disqus.</a></noscript> -->
+<script src="https://cdn.staticfile.org/jquery/3.2.1/jquery.min.js"></script>
+<script src="/assets/js/prism.js"></script>
+<script src="/assets/js/index.min.js"></script>
+</body>
+</html>
